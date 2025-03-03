@@ -18,12 +18,12 @@ workflow {
 
     download_sequences.out.map{it[0]}.flatten().set{seqs}
 
-
     seqs | sketch
     ANI(sketch.out.collect())
 
-    food_mappings(match_taxids.out)
+    food_mappings(download.out, match_taxids.out, curate_taxids.out)
 }
+
 
 
 process download {
@@ -39,18 +39,49 @@ process download {
 
     script:
     """
-    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${foodb} -O foodb.tgz && \
-    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${genbank_summary} -O genbank_summary.tsv && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${params.foodb} -O foodb.tgz && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${params.genbank_summary} -O genbank_summary.tsv && \
     tar -xf foodb.tgz && \
     mv foodb_*_csv foodb
     """
 }
 
-process get_taxids {
+process curate_taxids {
     cpus 1
+    memory "4 GB"
+    time "30 m"
+    publishDir "${params.data_dir}"
 
     input:
     tuple path(foodb), path(gb_summary)
+    path(curated)
+
+    output:
+    path("curated_foods.csv")
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+
+    library(data.table)
+
+    foods <- fread("foodb/Food.csv")
+    foods[, "revised_taxonomy_id" := ncbi_taxonomy_id]
+    setkey(foods, id)
+    curated <- fread("curated")
+    foods[curated[["id"]], revised_taxonomy_id := curated[["taxid"]]]
+    fwrite(foods, "curated_foods.csv")
+    """
+}
+
+process get_taxids {
+    cpus 1
+    memory "4 GB"
+    time "1 h"
+
+    input:
+    tuple path(foodb), path(gb_summary)
+    path(curated)
 
     output:
     tuple path("foodb"), path("taxids.tsv"), path("${gb_summary}")
@@ -66,15 +97,17 @@ process get_taxids {
     ]
     genbank <- dt[!is.na(taxid), .(taxid = as.character(unique(taxid)))]
     genbank[, "source" := "genbank"]
-    dt <- fread("${foodb}/Food.csv")
+    dt <- fread("${curated}")
     foodb <- dt[!is.na(ncbi_taxonomy_id), .(taxid = ncbi_taxonomy_id)]
     foodb[, "source" := "foodb"]
-    fwrite(rbind(genbank, foodb), "taxids.tsv", col.names=F, sep="\t")
+    fwrite(rbind(genbank, foodb), "taxids.tsv", col.names=F, sep="\\t")
     """
 }
 
 process download_taxa_dbs {
     cpus 1
+    memory "500 MB"
+    time "2 h"
 
     input:
     val(taxdump)
@@ -92,6 +125,8 @@ process download_taxa_dbs {
 
 process get_lineage {
     cpus 1
+    memory "8 GB"
+    time "1 h"
 
     input:
     tuple path(foodb), path(taxids), path(gb_summary), path(taxadb)
@@ -110,6 +145,8 @@ process get_lineage {
 process match_taxids {
     cpus 1
     publishDir params.out
+    memory "8 GB"
+    time "1 h"
 
     input:
     tuple path(foodb), path(lineage), path(lineage_ids), path(gb_summary)
@@ -128,6 +165,7 @@ process download_sequences {
     memory "64 GB"
 
     publishDir params.out
+    time "48h"
 
     input:
     path(matches)
@@ -146,16 +184,19 @@ process food_mappings {
     cpus 1
     memory "64 GB"
     publishDir "${params.out}/dbs"
+    time "30 m"
 
     input:
+    tuple path(foodb), path(gb_summary)
     path(matches)
+    path(curated)
 
     output:
     tuple path("food_matches.csv"), path("food_contents.csv.gz")
 
     script:
     """
-    food_mapping.R ${params.out}/dbs/foodb $matches
+    food_mapping.R ${foodb} ${matches} ${curated}
     """
 }
 
@@ -163,6 +204,7 @@ process sketch {
     cpus 2
     memory "4 GB"
     publishDir "${params.out}/sketches"
+    time "8 h"
 
     input:
     path(seq)
@@ -180,6 +222,7 @@ process ANI {
     cpus params.threads
     memory "64 GB"
     publishDir "${params.out}", mode: "copy", overwite: true
+    time "8 h"
 
     input:
     path(sigs)

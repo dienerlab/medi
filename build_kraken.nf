@@ -7,14 +7,29 @@ params.maxDbSize = 500
 params.confidence = 0.3
 params.threads = 20
 params.rebuild = false
-params.downloads = "${launchDir}/data"
 params.out = "${launchDir}/data"
 params.db = "${params.out}/medi_db"
 
+/* Helper functions */
+
+// Helper to calculate the required RAM for the Kraken2 database
+def estimate_db_size(hash, extra) {
+    def db_size = null
+
+    // Calculate db memory requirement
+    if (params.dbmem) {
+        db_size = MemoryUnit.of("${params.dbmem} GB") + extra
+    } else {
+        db_size = MemoryUnit.of(file(hash).size()) + extra
+        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
+    }
+
+    return db_size
+}
 
 workflow {
     if (!params.rebuild) {
-        Channel.fromPath("${params.downloads}/sequences/*.fna.gz").set{food_sequences}
+        Channel.fromPath("${params.out}/sequences/*.fna.gz").set{food_sequences}
         setup_kraken_db()
         add_existing(setup_kraken_db.out, params.additionalDbs)
         add_sequences(food_sequences, add_existing.out.last())
@@ -32,6 +47,7 @@ workflow {
 process setup_kraken_db {
     cpus 1
     memory "8 GB"
+    time "12 h"
 
     output:
     path("medi_db")
@@ -46,6 +62,7 @@ process add_sequences {
     cpus 5
     memory "16 GB"
     publishDir params.out
+    time "48 h"
 
     input:
     path(fasta)
@@ -65,6 +82,7 @@ process add_sequences {
 process add_existing {
     cpus 4
     memory "16 GB"
+    time "48 h"
 
     input:
     path(db)
@@ -86,7 +104,9 @@ process add_existing {
 
 process build_kraken_db {
     cpus params.threads
-    memory "${params.maxDbSize} GB"
+    memory { estimate_db_size("${params.db}/hash.k2d", 16.GB) }
+    cpus params.max_threads
+    time "72 h"
 
     input:
     path(db)
@@ -106,6 +126,7 @@ process build_kraken_db {
 process self_classify {
     cpus 1
     memory "${params.maxDbSize} GB"
+    time "48 h"
 
     input:
     path(db)
@@ -126,6 +147,7 @@ process build_bracken {
     cpus 20
     memory "64 GB"
     publishDir params.out
+    time "12 h"
 
     input:
     path(db)
@@ -143,6 +165,7 @@ process build_bracken {
 process library {
     cpus 1
     memory "4 GB"
+    time "1 h"
 
     input:
     path(db)

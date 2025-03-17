@@ -10,7 +10,10 @@ workflow {
     def genbank_summary = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
     def taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
 
-    download(foodb, genbank_summary) | get_taxids
+    download(foodb, genbank_summary)
+    curate_taxids(download.out, file("${projectDir}/data/curated.csv"))
+    get_taxids(download.out, curate_taxids.out)
+
     download_taxa_dbs(taxdump)
     get_lineage(get_taxids.out.combine(download_taxa_dbs.out))
         | match_taxids

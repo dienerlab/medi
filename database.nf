@@ -42,8 +42,8 @@ process download {
 
     script:
     """
-    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${params.foodb} -O foodb.tgz && \
-    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${params.genbank_summary} -O genbank_summary.tsv && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${foodb} -O foodb.tgz && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${genbank_summary} -O genbank_summary.tsv && \
     tar -xf foodb.tgz && \
     mv foodb_*_csv foodb
     """

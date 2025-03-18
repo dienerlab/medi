@@ -10,8 +10,10 @@ library(R.utils)
 args <- commandArgs(trailingOnly = TRUE)
 
 matches <- fread(args[1])
-threads <- as.numeric(args[2])
+group <- args[2]
 out_folder <- args[3]
+target_id <- args[4]
+
 
 if (is.null(getOption("reutils.api.key"))) {
     rate <- 0.9
@@ -80,7 +82,7 @@ download_sequences <- function(hits, taxid, out_dir="sequences") {
         }
     }
     if (!file.exists(filename) || !grepl(">", content(fetch))) {
-        flog.error("Failed downloading %s. UIDs=%s) :(", taxid, paste(unique(hits$id), collpase=", "))
+        flog.error("Failed downloading %s. UIDs=%s) :(", taxid, paste(unique(hits$id), collapse=", "))
         print(post)
         stop()
     }
@@ -100,26 +102,30 @@ download_sequences <- function(hits, taxid, out_dir="sequences") {
 }
 
 # Download additional contigs
-if (any(matches$db == "nucleotide")) {
-    contigs <- matches[
+if ((args[2] == "nucleotide") && (any(matches$db == "nucleotide"))) {
+    manifest <- matches[
         db == "nucleotide",
         download_sequences(.SD, matched_taxid[1]),
         by = "matched_taxid"]
     flog.info("Downloaded contigs for %d additional taxa.", nrow(contigs))
+    manifest[, "orig_taxid" := NULL]
+    fwrite(manifest, "nucleotide.csv")
+    sys.exit(0)
 }
 
 # Download full genomes
-gb <- matches[db == "genbank"]
-flog.info("Downloading %d genomes with %d threads.", gb[, uniqueN(id)], threads)
-dls <- parallel::mclapply(
-    gb[, unique(id)],
-    function(i) download_genome(gb[id == i]),
-    mc.cores=threads
-)
-genomes <- rbindlist(dls)
-flog.info("Downloaded %d full genomes.", nrow(genomes))
+if (args[2] == "genbank") {
+    target = args[4]
+    gb <- matches[db == "genbank"]
+    flog.info("Downloading genome %s with.", target)
+    report <- download_genome(gb[id == target])
+    flog.info(
+        "Found %d records summing to %.3g Mbps.",
+        report$num_records,
+        report$seqlength / 1e6
+    )
 
-manifest <- rbind(genomes, contigs)
-manifest[, "orig_taxid" := NULL]
-fwrite(manifest, "manifest.csv")
+    report[, "orig_taxid" := NULL]
+    fwrite(report, paste0(target, ".csv"))
+}
 

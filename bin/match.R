@@ -137,12 +137,14 @@ flog.info(
     capture.output(trials)
 )
 matches <- NULL
+gb_candidates <- gb_taxa
 for (i in 1:nrow(trials)) {
     rank <- trials[i, rank]
     db <- trials[i, db]
     queries <- food[!orig_taxid %in% matches$orig_taxid]
-    m <- ordered_match(queries, gb_taxa, gbs, db = db, rank = rank)
+    m <- ordered_match(queries, gb_candidates, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
+    gb_candidates <- gb_candidates[!matches$uid %chin% gb_candidates[["#assembly_accession"]]]
 }
 matches <- unique(food[, c("orig_taxid", RANKS), with = FALSE])[
     matches,

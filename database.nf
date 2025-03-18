@@ -17,9 +17,21 @@ workflow {
     download_taxa_dbs(taxdump)
     get_lineage(get_taxids.out.combine(download_taxa_dbs.out))
         | match_taxids
-        | download_sequences
 
-    download_sequences.out.map{it[0]}.flatten().set{seqs}
+    nuc = download_nucleotide(match_taxids.out)
+    match_taxids.out
+        .splitCsv()
+        .filter{row -> row.db == "genbank"}
+        .map{row -> tuple(row.id, match_taxids.out)}
+        .set{gb_seqs}
+    download_genbank(gb_seqs)
+    gb = merge_downloads(
+        download_genbank.out.map{t -> t[0]}.collect(),
+        download_genbank.out.map{t -> t[1]}.collect()
+    )
+    merge_all(nuc.concat(gb))
+
+    merge_all.out.map{it[1]}.flatten().set{seqs}
 
     seqs | sketch
     ANI(sketch.out.collect())
@@ -163,22 +175,74 @@ process match_taxids {
     """
 }
 
-process download_sequences {
-    cpus 8
-    memory "64 GB"
-
-    publishDir params.out
+process download_nucleotide {
+    cpus 2
+    memory "8 GB"
     time "48h"
 
     input:
     path(matches)
 
     output:
-    tuple path("sequences/*.fna.gz"), path("manifest.csv")
+    tuple path("nucleotide.csv"), path("sequences/*.fna.gz")
 
     script:
     """
-    download.R $matches $task.cpus sequences
+    download.R $matches "nucleotide" sequences "all"
+    """
+}
+
+process download_genbank {
+    cpus 2
+    memory "16 GB"
+    time "48h"
+
+    input:
+    tuple val(id), path(matches)
+
+    output:
+    tuple path("sequences/*.fna.gz"), path("${id}.csv")
+
+    script:
+    """
+    download.R $matches "genbank" sequences "${id}"
+    """
+}
+
+process merge_downloads {
+    cpus 1
+    memory "4 GB"
+    publishDir params.out
+    time "1 h"
+
+    input:
+    path(seqs)
+    path(manifests)
+
+    output:
+    tuple path("genbank.csv"), tuple("sequences/*.fna.gz")
+
+    script:
+    """
+    merge.R genbank.csv ${manifests}
+    """
+}
+
+process merge_all {
+    cpus 1
+    memory "4 GB"
+    publishDir params.out
+    time "1 h"
+
+    input:
+    tuple path(nuc), path(nuc_seqs), path(gb), path(gb_seqs)
+
+    output:
+    tuple path("manifest.csv"), path("sequences/*.fna.gz")
+
+    script:
+    """
+    merge.R manifest.csv nucleotide.csv genbank.csv
     """
 }
 

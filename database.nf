@@ -23,6 +23,7 @@ workflow {
         .splitCsv(header: true)
         .filter{row -> row.db == "genbank"}
         .map{row -> row.id}
+        .unique()
         .set{gb_ids}
     download_genbank(gb_ids.combine(match_taxids.out))
     gb = merge_downloads(

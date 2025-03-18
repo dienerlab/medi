@@ -49,6 +49,7 @@ download_genome <- function(hit, out_dir="sequences") {
         flog.error("Failed downloading %s :(", hit$url)
         stop()
     }
+    flog.info("Downloaded genome for assembly %s...", id)
     fa <- readDNAStringSet(hit$filename)
     short_names <- tstrsplit(names(fa), "\\s+")[[1]]
     names(fa) <- paste0(short_names, "_", 1:length(short_names),
@@ -57,7 +58,7 @@ download_genome <- function(hit, out_dir="sequences") {
     writeXStringSet(fa, hit$filename, compress = "gzip")
     hit$num_records <- length(fa)
     hit$seqlength <- as.double(sum(width(fa)))
-    flog.info("Downloaded genome for assembly %s...", id)
+
     return(hit)
 }
 

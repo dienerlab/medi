@@ -198,6 +198,7 @@ process download_genbank {
     cpus 2
     memory "24 GB"
     time "8h"
+    errorStrategy "ignore"
 
     input:
     tuple val(id), path(matches)

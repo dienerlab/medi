@@ -152,7 +152,7 @@ for (i in 1:nrow(trials)) {
     queries <- food[!orig_taxid %in% matches$orig_taxid]
     m <- ordered_match(queries, gb_candidates, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
-    gb_candidates <- gb_candidates[!matches$uid %chin% gb_candidates[["#assembly_accession"]]]
+    gb_candidates <- gb_candidates[!gb_candidates[["#assembly_accession"]] %chin% matches$id]
 }
 matches <- unique(food[, c("orig_taxid", RANKS), with = FALSE])[
     matches,

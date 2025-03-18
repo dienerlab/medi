@@ -20,11 +20,11 @@ workflow {
 
     nuc = download_nucleotide(match_taxids.out)
     match_taxids.out
-        .splitCsv()
+        .splitCsv(header: true)
         .filter{row -> row.db == "genbank"}
-        .map{row -> tuple(row.id, match_taxids.out)}
-        .set{gb_seqs}
-    download_genbank(gb_seqs)
+        .map{row -> row.id}
+        .set{gb_ids}
+    download_genbank(gb_ids.combine(match_taxids.out))
     gb = merge_downloads(
         download_genbank.out.map{t -> t[0]}.collect(),
         download_genbank.out.map{t -> t[1]}.collect()
@@ -65,7 +65,7 @@ process curate_taxids {
     cpus 1
     memory "4 GB"
     time "30 m"
-    publishDir "${params.data_dir}"
+    publishDir params.out
 
     input:
     tuple path(foodb), path(gb_summary)

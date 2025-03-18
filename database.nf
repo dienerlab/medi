@@ -11,7 +11,7 @@ workflow {
     def taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
 
     download_foodb_genbank(foodb, genbank_summary)
-    curate_taxids(download_foodb_genbank.out, file("${projectDir}/data/curated.csv"))
+    curate_taxids(download_foodb_genbank.out, file("${projectDir}/data/missing_foodb_curated.csv"))
     get_taxids(download_foodb_genbank.out, curate_taxids.out)
 
     download_taxa_dbs(taxdump)
@@ -83,8 +83,9 @@ process curate_taxids {
     foods <- fread("foodb/Food.csv")
     foods[, "revised_taxonomy_id" := ncbi_taxonomy_id]
     setkey(foods, id)
-    curated <- fread("curated")
-    foods[curated[["id"]], revised_taxonomy_id := curated[["taxid"]]]
+    curated <- fread("${curated}")
+    foods[J(curated[["id"]]), revised_taxonomy_id := curated[["revised_taxonomy_id"]]]
+
     fwrite(foods, "curated_foods.csv")
     """
 }

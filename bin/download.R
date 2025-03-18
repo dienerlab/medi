@@ -111,7 +111,7 @@ if ((args[2] == "nucleotide") && (any(matches$db == "nucleotide"))) {
     flog.info("Downloaded contigs for %d additional taxa.", nrow(contigs))
     manifest[, "orig_taxid" := NULL]
     fwrite(manifest, "nucleotide.csv")
-    sys.exit(0)
+    Sys.exit(0)
 }
 
 # Download full genomes

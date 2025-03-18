@@ -222,7 +222,7 @@ process merge_downloads {
     path(manifests)
 
     output:
-    tuple path("genbank.csv"), tuple("sequences/*.fna.gz")
+    tuple path("genbank.csv"), path("sequences/*.fna.gz")
 
     script:
     """

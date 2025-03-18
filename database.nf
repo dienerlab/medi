@@ -10,9 +10,9 @@ workflow {
     def genbank_summary = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
     def taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
 
-    download(foodb, genbank_summary)
-    curate_taxids(download.out, file("${projectDir}/data/curated.csv"))
-    get_taxids(download.out, curate_taxids.out)
+    download_foodb_genbank(foodb, genbank_summary)
+    curate_taxids(download_foodb_genbank.out, file("${projectDir}/data/curated.csv"))
+    get_taxids(download_foodb_genbank.out, curate_taxids.out)
 
     download_taxa_dbs(taxdump)
     get_lineage(get_taxids.out.combine(download_taxa_dbs.out))
@@ -36,12 +36,12 @@ workflow {
     seqs | sketch
     ANI(sketch.out.collect())
 
-    food_mappings(download.out, match_taxids.out, curate_taxids.out)
+    food_mappings(download_foodb_genbank.out, match_taxids.out, curate_taxids.out)
 }
 
 
 
-process download {
+process download_foodb_genbank {
     cpus 1
     publishDir "${params.out}/dbs"
 
@@ -195,7 +195,8 @@ process download_nucleotide {
 process download_genbank {
     cpus 2
     memory "16 GB"
-    time "48h"
+    time "8h"
+    errorStrategy 'ignore'
 
     input:
     tuple val(id), path(matches)

@@ -54,6 +54,8 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         }
         uids <- matches[, `#assembly_accession`]
         url <- matches[, ftp_path]
+        refseq_category <- matches[, refseq_category]
+        assembly_level <- matches[, assembly_level]
     } else {
         r <- rate
         for (i in 0:7) {
@@ -76,11 +78,17 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         }
         uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
+        refseq_category <- "excluded"
+        assembly_level <- "contig"
+
     }
     if (length(uids) == 0) {
         return(NULL)
     }
-    return(data.table(id = uids, db = db, matched_taxid = taxid, url = url))
+    return(data.table(
+        id = uids, db = db, matched_taxid = taxid, url = url,
+        refseq_category = refseq_category, assembly_level = assembly_level
+    ))
 }
 
 ordered_match <- function(

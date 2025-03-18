@@ -127,5 +127,6 @@ if (args[2] == "genbank") {
 
     report[, "orig_taxid" := NULL]
     fwrite(report, paste0(target, ".csv"))
+    sys.exit(0)
 }
 

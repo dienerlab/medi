@@ -153,14 +153,14 @@ process get_lineage {
     script:
     """
     taxonkit lineage --data-dir $taxadb -i 1 $taxids > raw.txt && \
-    taxonkit reformat --data-dir $taxadb -i 3 raw.txt > lineage.txt && \
-    taxonkit reformat --data-dir $taxadb -t -i 3 raw.txt > lineage_ids.txt
+    taxonkit reformat -f "{K};{p};{c};{o};{f};{g};{s}" --data-dir $taxadb -i 3 raw.txt > lineage.txt && \
+    taxonkit reformat -f "{K};{p};{c};{o};{f};{g};{s}" --data-dir $taxadb -t -i 3 raw.txt > lineage_ids.txt
     """
 }
 
 process match_taxids {
     cpus 1
-    publishDir params.out
+    publishDir params.out, mode: "copy", overwrite: true
     memory "8 GB"
     time "1 h"
 
@@ -195,9 +195,8 @@ process download_nucleotide {
 
 process download_genbank {
     cpus 2
-    memory "16 GB"
+    memory "24 GB"
     time "8h"
-    errorStrategy 'ignore'
 
     input:
     tuple val(id), path(matches)

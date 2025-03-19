@@ -179,7 +179,7 @@ process match_taxids {
 
 process download_nucleotide {
     cpus 2
-    memory "8 GB"
+    memory "32 GB"
     time "48h"
 
     input:
@@ -227,6 +227,7 @@ process merge_downloads {
 
     script:
     """
+    mkdir sequences && mv ${seqs} sequences/
     merge.R genbank.csv ${manifests}
     """
 }

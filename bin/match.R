@@ -45,7 +45,7 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         if (all(is.na(tids))) {
             return(NULL)
         }
-        matches <- gb_summary[tids] %>% genbank_quality()
+        matches <- gb_summary[tids]
         # If we have a complete genome we use the most recent one
         if (matches[, max(score)] > 1) {
             matches <- matches[score == max(score)][1]
@@ -145,7 +145,7 @@ flog.info(
     capture.output(trials)
 )
 matches <- NULL
-gb_candidates <- copy(gb_taxa)
+gb_candidates <- copy(gb_taxa) |> genbank_quality()
 for (i in 1:nrow(trials)) {
     rank <- trials[i, rank]
     db <- trials[i, db]

@@ -104,7 +104,7 @@ download_sequences <- function(hits, taxid, out_dir="sequences") {
 
 # Download additional contigs
 if ((args[2] == "nucleotide") && (any(matches$db == "nucleotide"))) {
-    manifest <- matches[
+    contigs <- matches[
         db == "nucleotide",
         download_sequences(.SD, matched_taxid[1]),
         by = "matched_taxid"]

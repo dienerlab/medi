@@ -3,12 +3,13 @@
 nextflow.enable.dsl = 2
 
 params.additionalDbs = ["bacteria", "archaea", "human", "viral", "plasmid", "UniVec_Core"]
-params.maxDbSize = 500
+params.maxDbSize = "750 GB"
 params.confidence = 0.3
 params.threads = 20
 params.rebuild = false
 params.out = "${launchDir}/data"
 params.db = "${params.out}/medi_db"
+params.additionalDecoys ="${params.out}/decoys"
 
 /* Helper functions */
 
@@ -17,12 +18,8 @@ def estimate_db_size(hash, extra) {
     def db_size = null
 
     // Calculate db memory requirement
-    if (params.dbmem) {
-        db_size = MemoryUnit.of("${params.dbmem} GB") + extra
-    } else {
-        db_size = MemoryUnit.of(file(hash).size()) + extra
-        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
-    }
+    db_size = MemoryUnit.of(file(hash).size()) + extra
+    log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
 
     return db_size
 }
@@ -30,9 +27,14 @@ def estimate_db_size(hash, extra) {
 workflow {
     if (!params.rebuild) {
         Channel.fromPath("${params.out}/sequences/*.fna.gz").set{food_sequences}
+
+        Channel.fromPath("${params.additionalDecoys}/*.fna.gz")
+        .set{decoy_sequences}
+
         setup_kraken_db()
         add_existing(setup_kraken_db.out, params.additionalDbs)
-        add_sequences(food_sequences, add_existing.out.last())
+        decoys = add_sequences(decoy_sequences, add_existing.out.last())
+        add_sequences(food_sequences, decoys.last())
         db = add_sequences.out.last()
     } else {
         db = Channel.fromPath(params.db)
@@ -61,7 +63,6 @@ process setup_kraken_db {
 process add_sequences {
     cpus 5
     memory "16 GB"
-    publishDir params.out
     time "48 h"
 
     input:
@@ -104,9 +105,10 @@ process add_existing {
 
 process build_kraken_db {
     cpus params.threads
-    memory { estimate_db_size("${params.db}/hash.k2d", 16.GB) }
+    memory { MemoryUnit.of(params.maxDbSize) + 16.GB }
     cpus params.max_threads
     time "72 h"
+    publishDir params.out
 
     input:
     path(db)
@@ -118,14 +120,14 @@ process build_kraken_db {
     """
     kraken2-build --build --db $db \
         --threads ${task.cpus} \
-        --max-db-size ${(params.max_db_size as BigInteger) * (1000G**3)}
+        --max-db-size ${task.memory.toGiga()}
     """
 }
 
 
 process self_classify {
     cpus 1
-    memory "${params.maxDbSize} GB"
+    memory { estimate_db_size("${db}/hash.k2d", 64.GB) }
     time "48 h"
 
     input:

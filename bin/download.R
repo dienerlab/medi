@@ -129,3 +129,10 @@ if (args[2] == "genbank") {
     fwrite(report, paste0(target, ".csv"))
 }
 
+if (args[2] == "decoys") {
+    flog.info("Downloading %d additional decoys.", nrow(matches))
+    decoys <- matches[, download_genome(.SD, out_folder), by = "id"]
+    flog.info("Downloaded genomes for %d decoys summing to %.2g Mbps.",
+                nrow(decoys), decoys[, sum(seqlength) / 1e6])
+    fwrite(decoys, "decoys.csv")
+}

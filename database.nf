@@ -4,6 +4,7 @@ nextflow.enable.dsl = 2
 
 params.threads = 20
 params.out = "${launchDir}/data"
+params.additionalDecoys = null //"${params.out}/decoys.csv"
 
 workflow {
     def foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
@@ -26,16 +27,22 @@ workflow {
         .unique()
         .set{gb_ids}
     download_genbank(gb_ids.combine(match_taxids.out))
-    gb = merge_downloads(
+    merge_downloads(
         download_genbank.out.map{t -> t[0]}.collect(),
         download_genbank.out.map{t -> t[1]}.collect()
     )
-    merge_all(nuc.concat(gb))
+    merge_all(nuc.concat(merge_downloads.out))
 
     merge_all.out.map{it[1]}.flatten().set{seqs}
 
     seqs | sketch
     ANI(sketch.out.collect())
+
+    // Add more decoy sequences
+    if (params.additionalDecoys) {
+        Channel.fromPath("${params.additionalDecoys}").set{decoy_manifest}
+        download_decoys(decoy_manifest)
+    }
 
     food_mappings(download_foodb_genbank.out, match_taxids.out, curate_taxids.out)
 }
@@ -209,6 +216,23 @@ process download_genbank {
     script:
     """
     download.R $matches "genbank" sequences "${id}"
+    """
+}
+
+process download_decoys {
+    cpus 2
+    memory "32 GB"
+    time "48h"
+
+    input:
+    path(decoys)
+
+    output:
+    tuple path("decoys.csv"), path("decoys/*.fna.gz")
+
+    script:
+    """
+    download.R $decoys decoys decoys "all"
     """
 }
 

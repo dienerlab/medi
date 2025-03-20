@@ -20,7 +20,7 @@ if (is.null(getOption("reutils.api.key"))) {
 }
 
 genbank_quality <- function(dt) {
-    dt <- copy(dt)[order(-seq_rel_date)]
+    dt <- dt[order(-seq_rel_date)]
     dt[, "score" := 0]
     dt["reference genome" %in% refseq_category, score := score + 20]
     dt["representative genome" %in% refseq_category, score := score + 10]
@@ -145,14 +145,14 @@ flog.info(
     capture.output(trials)
 )
 matches <- NULL
-gb_candidates <- copy(gb_taxa) |> genbank_quality()
+gbs <- genbank_quality(gbs)
 for (i in 1:nrow(trials)) {
     rank <- trials[i, rank]
     db <- trials[i, db]
     queries <- food[!orig_taxid %in% matches$orig_taxid]
-    m <- ordered_match(queries, gb_candidates, gbs, db = db, rank = rank)
+    m <- ordered_match(queries, gb_ttaxa, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
-    gb_candidates[gb_candidates[["#assembly_accession"]] %chin% matches$id, score := score - 30]
+    gbs[`#assembly_accession` %chin% matches$id, score := score - 30]
 }
 matches <- unique(food[, c("orig_taxid", RANKS), with = FALSE])[
     matches,

@@ -109,7 +109,7 @@ if ((args[2] == "nucleotide") && (any(matches$db == "nucleotide"))) {
         download_sequences(.SD, matched_taxid[1]),
         by = "matched_taxid"]
     flog.info("Downloaded contigs for %d additional taxa.", nrow(contigs))
-    manifest[, "orig_taxid" := NULL]
+    contigs[, "orig_taxid" := NULL]
     fwrite(contigs, "nucleotide.csv")
 }
 

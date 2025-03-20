@@ -129,6 +129,7 @@ gbs <- fread(args[2], sep = "\t")
 # Only keep the ones actually available.
 gbs <- gbs[grepl("ftp.ncbi.nlm.nih.gov", ftp_path, fixed = TRUE)]
 gbs[, "taxid" := as.character(taxid)]
+gbs <- genbank_quality(gbs)
 setkey(gbs, taxid)
 taxids[, (RANKS) := tstrsplit(names, ";")]
 taxids[, (paste0(RANKS, "_taxid")) := tstrsplit(taxids, ";")]
@@ -145,12 +146,11 @@ flog.info(
     capture.output(trials)
 )
 matches <- NULL
-gbs <- genbank_quality(gbs)
 for (i in 1:nrow(trials)) {
     rank <- trials[i, rank]
     db <- trials[i, db]
     queries <- food[!orig_taxid %in% matches$orig_taxid]
-    m <- ordered_match(queries, gb_ttaxa, gbs, db = db, rank = rank)
+    m <- ordered_match(queries, gb_taxa, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
     gbs[`#assembly_accession` %chin% matches$id, score := score - 30]
 }

@@ -28,9 +28,10 @@ workflow {
         .set{gb_ids}
     download_genbank(gb_ids.combine(match_taxids.out))
     merge_downloads(
-        download_genbank.out.map{t -> t[0]}.collect(),
-        download_genbank.out.map{t -> t[1]}.collect()
+        download_genbank.out.collect{t -> t[0]},
+        download_genbank.out.collect{t -> t[1]}
     )
+    nuc.concat(merge_downloads.out).view()
     merge_all(nuc.concat(merge_downloads.out))
 
     merge_all.out.map{it[1]}.flatten().set{seqs}

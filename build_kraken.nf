@@ -33,8 +33,8 @@ workflow {
 
         setup_kraken_db()
         add_existing(setup_kraken_db.out, params.additionalDbs)
-        decoys = add_sequences(decoy_sequences, add_existing.out.last())
-        add_sequences(food_sequences, decoys.last())
+        add_decoys(decoy_sequences, add_existing.out.last())
+        add_sequences(food_sequences, add_decoys.out.last())
         db = add_sequences.out.last()
     } else {
         db = Channel.fromPath(params.db)
@@ -61,7 +61,27 @@ process setup_kraken_db {
 }
 
 process add_sequences {
-    cpus 5
+    cpus 4
+    memory "16 GB"
+    time "48 h"
+
+    input:
+    path(fasta)
+    path(db)
+
+    output:
+    path("$db")
+
+    script:
+    """
+    gunzip -c $fasta > ${fasta.baseName} && \
+    kraken2-build --add-to-library ${fasta.baseName} --db $db --threads ${task.cpus} && \
+    rm ${fasta.baseName}
+    """
+}
+
+process add_decoys {
+    cpus 4
     memory "16 GB"
     time "48 h"
 

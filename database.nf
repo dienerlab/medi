@@ -27,18 +27,15 @@ workflow {
         .unique()
         .set{gb_ids}
     download_genbank(gb_ids.combine(match_taxids.out))
-    merge_downloads(
-        download_genbank.out.collect{t -> t[0]},
-        download_genbank.out.collect{t -> t[1]}
-    )
-    nuc.concat(merge_downloads.out).view()
-    merge_all(nuc.concat(merge_downloads.out))
+    download_genbank.out.collect() | merge_genbank
+    merge_all(nuc.combine(merge_genbank.out))
 
     merge_all.out.map{it[1]}.flatten().set{seqs}
 
     seqs | sketch
     ANI(sketch.out.collect())
 
+    println(params)
     // Add more decoy sequences
     if (params.additionalDecoys) {
         Channel.fromPath("${params.additionalDecoys}").set{decoy_manifest}
@@ -204,7 +201,7 @@ process download_nucleotide {
 
 process download_genbank {
     cpus 2
-    memory "24 GB"
+    memory "32 GB"
     time "8h"
     errorStrategy "ignore"
 
@@ -224,6 +221,7 @@ process download_decoys {
     cpus 2
     memory "32 GB"
     time "48h"
+    publishDir params.out
 
     input:
     path(decoys)
@@ -237,23 +235,22 @@ process download_decoys {
     """
 }
 
-process merge_downloads {
+process merge_genbank {
     cpus 1
     memory "4 GB"
     publishDir params.out
     time "1 h"
 
     input:
-    path(seqs)
-    path(manifests)
+    path(files)
 
     output:
     tuple path("genbank.csv"), path("sequences/*.fna.gz")
 
     script:
     """
-    mkdir sequences && mv ${seqs} sequences/
-    merge.R genbank.csv ${manifests}
+    mkdir sequences && mv *.fna.gz sequences/
+    merge.R genbank.csv *.csv
     """
 }
 
@@ -271,6 +268,7 @@ process merge_all {
 
     script:
     """
+    mkdir sequences && mv ${nuc_seqs} ${gb_seqs} sequences/
     merge.R manifest.csv nucleotide.csv genbank.csv
     """
 }
@@ -298,7 +296,7 @@ process food_mappings {
 
 process sketch {
     cpus 2
-    memory "4 GB"
+    memory "16 GB"
     publishDir "${params.out}/sketches"
     time "8 h"
 
@@ -316,7 +314,7 @@ process sketch {
 
 process ANI {
     cpus params.threads
-    memory "64 GB"
+    memory "96 GB"
     publishDir "${params.out}", mode: "copy", overwite: true
     time "8 h"
 

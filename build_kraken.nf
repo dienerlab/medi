@@ -1,5 +1,4 @@
 #!/usr/bin/env nextflow
-include { food_mappings } from './database.nf'
 
 nextflow.enable.dsl = 2
 
@@ -8,6 +7,7 @@ params.maxDbSize = "750 GB"
 params.confidence = 0.3
 params.threads = 20
 params.rebuild = false
+params.downloads = "${launchDir}/data"
 params.out = "${launchDir}/data"
 params.db = "${params.out}/medi_db"
 params.additionalDecoys ="${params.out}/decoys"
@@ -48,8 +48,10 @@ workflow {
     }
 
     build_kraken_db(taxonomy, lib)
-    self_classify(build_kraken_db.out)
-    build_bracken(self_classify.out) | add_info
+    self_classify(build_kraken_db.out, lib)
+    build_bracken(self_classify.out)
+
+    add_info()
 }
 
 
@@ -166,17 +168,19 @@ process self_classify {
     time "48 h"
 
     input:
-    path(db)
+    tuple path(taxonomy), path(bins)
+    path(library)
 
     output:
-    path(db)
+    tuple path(taxonomy), path(bins), path("medi_db/database.kraken")
 
     script:
     """
-    kraken2 --db ${db} --threads ${task.cpus} \
+    mkdir medi_db && mv ${taxonomy} ${bins} medi_db
+    kraken2 --db medi_db --threads ${task.cpus} \
         --confidence ${params.confidence} \
         --threads ${task.cpus} \
-        --memory-mapping ${db}/library/*/*.f*a > ${db}/database.kraken
+        --memory-mapping ${library}/*/*.f*a > medi_db/database.kraken
     """
 }
 
@@ -185,51 +189,36 @@ process build_bracken {
     memory "64 GB"
     publishDir params.out
     time "12 h"
+    publishDir params.db
 
     input:
-    path(db)
+    tuple path(taxonomy), path(bins), path(self_class)
 
     output:
-    path("$db")
+    path("database*.kmer_distrib")
 
     script:
     """
-    bracken-build -d $db -t ${task.cpus} -k 35 -l 100 && \
-    bracken-build -d $db -t ${task.cpus} -k 35 -l 150
-    """
-}
-
-process library {
-    cpus 1
-    memory "4 GB"
-    time "1 h"
-
-    input:
-    path(db)
-
-    output:
-    path("$db/library/*/*.f*a")
-
-    script:
-    """
-    ls ${db}/library/*/*.f*a | wc -l
+    mkdir medi_db && mv ${taxonomy} ${bins} ${self_class} medi_db
+    bracken-build -d medi_db -t ${task.cpus} -k 35 -l 100
+    bracken-build -d medi_db -t ${task.cpus} -k 35 -l 150
     """
 }
 
 process add_info {
     cpus 1
     memory "1 GB"
-    publishDir params.out
+    publishDir params.out, mode: "copy", overwrite: true
 
     input:
     path(db)
 
     output:
-    path("$db")
+    tuple path("manifest.csv"), path("food_matches.csv"), path("food_contents.csv.gz")
 
     script:
     """
-    cp ${params.downloads}/dbs/{food_matches.csv,food_contents.csv.gz} ${db}
-    cp ${params.downloads}/manifest.csv ${db}
+    cp ${params.downloads}/dbs/{food_matches.csv,food_contents.csv.gz} .
+    cp ${params.downloads}/manifest.csv .
     """
 }

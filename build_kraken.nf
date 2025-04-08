@@ -139,7 +139,7 @@ process assemble_library {
 process build_kraken_db {
     cpus params.threads
     memory { MemoryUnit.of(params.maxDbSize) + 16.GB }
-    cpus params.max_threads
+    cpus params.threads
     time "72 h"
     publishDir params.db
 

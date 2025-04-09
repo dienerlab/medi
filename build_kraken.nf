@@ -3,7 +3,7 @@
 nextflow.enable.dsl = 2
 
 params.additionalDbs = ["bacteria", "archaea", "human", "viral", "plasmid", "UniVec_Core"]
-params.maxDbSize = "750 GB"
+params.maxDbSize = "500 GB"
 params.confidence = 0.3
 params.threads = 20
 params.rebuild = false
@@ -11,6 +11,7 @@ params.downloads = "${launchDir}/data"
 params.out = "${launchDir}/data"
 params.db = "${params.out}/medi_db"
 params.additionalDecoys ="${params.out}/decoys"
+params.useFtp = false
 
 /* Helper functions */
 
@@ -26,6 +27,7 @@ def estimate_db_size(hash, extra) {
 }
 
 workflow {
+    println(params)
     if (!params.rebuild) {
         Channel.fromPath("${params.out}/sequences/*.fna.gz").set{food_sequences}
 
@@ -106,12 +108,12 @@ process add_existing {
     if (group == "human")
         """
         mkdir medi_db && mv ${taxonomy} medi_db
-        kraken2-build --download-library $group --db medi_db --no-mask --threads ${task.cpus}
+        kraken2-build --download-library $group --db medi_db --no-mask --threads ${task.cpus} ${params.useFtp ? "--use-ftp" : ""}
         """
     else
         """
         mkdir medi_db && mv taxonomy medi_db
-        kraken2-build --download-library $group --db medi_db --threads ${task.cpus}
+        kraken2-build --download-library $group --db medi_db --threads ${task.cpus} ${params.useFtp ? "--use-ftp" : ""}
         """
 }
 
@@ -208,10 +210,7 @@ process build_bracken {
 process add_info {
     cpus 1
     memory "1 GB"
-    publishDir params.out, mode: "copy", overwrite: true
-
-    input:
-    path(db)
+    publishDir params.db, mode: "copy", overwrite: true
 
     output:
     tuple path("manifest.csv"), path("food_matches.csv"), path("food_contents.csv.gz")

@@ -12,15 +12,16 @@ params.out = "${launchDir}/data"
 params.db = "${params.out}/medi_db"
 params.additionalDecoys ="${params.out}/decoys"
 params.useFtp = false
+params.readLengths = [100, 150, 250]
 
 /* Helper functions */
 
 // Helper to calculate the required RAM for the Kraken2 database
-def estimate_db_size(hash, extra) {
+def estimate_db_size(db, extra) {
     def db_size = null
 
     // Calculate db memory requirement
-    db_size = MemoryUnit.of(file(hash).size()) + extra
+    db_size = MemoryUnit.of(db*.size().sum()) + extra
     log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
 
     return db_size
@@ -28,6 +29,9 @@ def estimate_db_size(hash, extra) {
 
 workflow {
     println(params)
+
+    rlens = Channel.from(params.readLengths)
+
     if (!params.rebuild) {
         Channel.fromPath("${params.out}/sequences/*.fna.gz").set{food_sequences}
 
@@ -46,12 +50,12 @@ workflow {
         )
     } else {
         taxonomy = Channel.of(file("${params.db}/taxonomy"))
-        lib = Channel.of(file("${params.db}/library"))
+        lib = Channel.of(file("${params.out}/library"))
     }
 
     build_kraken_db(taxonomy, lib)
     self_classify(build_kraken_db.out, lib)
-    build_bracken(self_classify.out)
+    build_bracken(build_kraken_db.out, self_classify.out, lib, rlens)
 
     add_info()
 }
@@ -121,22 +125,20 @@ process assemble_library {
     cpus 1
     memory "8 GB"
     time "12h"
-    publishDir params.db
+    publishDir params.out
 
     input:
-    path(taxonomy)
     path(existing)
     path(sequences)
 
     output:
-    path("medi_db/library")
+    path("library")
 
     script:
     """
-    mkdir medi_db && mkdir medi_db/library && mkdir medi_db/library/added
-    mv ${taxonomy} medi_db
-    mv ${existing} medi_db/library
-    mv ${sequences} medi_db/library/added
+    mkdir library && mkdir library/added
+    mv ${existing} library
+    mv ${sequences} library/added
     """
 }
 
@@ -152,58 +154,60 @@ process build_kraken_db {
     path(library)
 
     output:
-    tuple path("medi_db/taxonomy"), path("medi_db/*.k2d")
+    tuple path("taxonomy"), path("*.k2d"), path("seq2taxid.map")
 
     script:
     """
-    mkdir medi_db && mv ${taxonomy} ${library} medi_db
-    kraken2-build --build --db medi_db \
+    kraken2-build --build --db . \
         --threads ${task.cpus} \
-        --max-db-size ${task.memory.toGiga()}
+        --max-db-size ${MemoryUnit.of(params.maxDbSize).toBytes()}
     """
 }
 
 
 process self_classify {
-    cpus 1
-    memory { estimate_db_size("${db}/hash.k2d", 64.GB) }
-    time "48 h"
+    cpus params.threads
+    memory { estimate_db_size(bins, 400.GB) }
+    time "5 d"
 
     input:
-    tuple path(taxonomy), path(bins)
+    tuple path(tax), path(bins), path(seqmap)
     path(library)
 
     output:
-    tuple path(taxonomy), path(bins), path("medi_db/database.kraken")
+    path("database.kraken")
 
     script:
     """
-    mkdir medi_db && mv ${taxonomy} ${bins} medi_db
-    kraken2 --db medi_db --threads ${task.cpus} \
-        --confidence ${params.confidence} \
-        --threads ${task.cpus} \
-        --memory-mapping ${library}/*/*.f*a > medi_db/database.kraken
+    for f in ${library}/*/*.f*a; do
+        echo "Classifying \$f..."
+        kraken2 --db . --threads ${task.cpus} \
+            --confidence ${params.confidence} \
+            --threads ${task.cpus} \
+            --memory-mapping \$f >> medi_db/database.kraken
+    done
     """
 }
 
 process build_bracken {
-    cpus 20
+    cpus params.threads
     memory "64 GB"
     publishDir params.out
     time "12 h"
     publishDir params.db
 
     input:
-    tuple path(taxonomy), path(bins), path(self_class)
+    tuple path(taxonomy), path(bins), path(seqmap)
+    path(self_class)
+    path(lib)
+    each rlen
 
     output:
     path("database*.kmer_distrib")
 
     script:
     """
-    mkdir medi_db && mv ${taxonomy} ${bins} ${self_class} medi_db
-    bracken-build -d medi_db -t ${task.cpus} -k 35 -l 100
-    bracken-build -d medi_db -t ${task.cpus} -k 35 -l 150
+    bracken-build -d . -t ${task.cpus} -k 35 -l ${rlen}
     """
 }
 

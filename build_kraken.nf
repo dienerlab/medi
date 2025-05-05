@@ -144,7 +144,7 @@ process assemble_library {
 
 process build_kraken_db {
     cpus params.threads
-    memory { MemoryUnit.of(params.maxDbSize) + 16.GB }
+    memory { MemoryUnit.of(params.maxDbSize) + 100.GB }
     cpus params.threads
     time "72 h"
     publishDir params.db
@@ -154,10 +154,11 @@ process build_kraken_db {
     path(library)
 
     output:
-    tuple path("taxonomy"), path("*.k2d"), path("seq2taxid.map")
+    tuple path("taxonomy"), path("*.k2d"), path("seqid2taxid.map")
 
     script:
     """
+    alias find="find -L"  # Kraken2 bug see https://github.com/DerrickWood/kraken2/issues/67
     kraken2-build --build --db . \
         --threads ${task.cpus} \
         --max-db-size ${MemoryUnit.of(params.maxDbSize).toBytes()}
@@ -184,7 +185,7 @@ process self_classify {
         kraken2 --db . --threads ${task.cpus} \
             --confidence ${params.confidence} \
             --threads ${task.cpus} \
-            --memory-mapping \$f >> medi_db/database.kraken
+            --memory-mapping \$f >> database.kraken
     done
     """
 }

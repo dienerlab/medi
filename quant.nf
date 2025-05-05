@@ -23,15 +23,20 @@ params.help = false
 /* Helper functions */
 
 // Helper to calculate the required RAM for the Kraken2 database
-def estimate_db_size(hash) {
+def estimate_db_size(hash, extra) {
     def db_size = null
 
     // Calculate db memory requirement
     if (params.dbmem) {
         db_size = MemoryUnit.of("${params.dbmem} GB")
-    } else {
-        db_size = MemoryUnit.of(file(hash).size()) + 6.GB
-        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
+    } else { 
+        hash_size = MemoryUnit.of(file(hash).size())
+        extra = MemoryUnit.of(extra)
+        db_size = hash_size + extra
+        log.info(
+            "Based on the hash size and input I am reserving ${db_size.toGiga()}GB" + 
+            " of memory for Kraken2 [hash: ${hash_size.toGiga()} GB, reads: ${extra.toGiga()} GB]."
+        )
     }
 
     return db_size
@@ -175,7 +180,7 @@ process preprocess {
 
 process kraken {
     cpus params.maxcpus
-    memory { estimate_db_size("${params.db}/hash.k2d") }
+    memory { estimate_db_size("${params.db}/hash.k2d", reads*.size().max()*4) }
     time { 2.h + reads.size() * 0.5.h }
     scratch false
     publishDir "${params.data_dir}/kraken2"
